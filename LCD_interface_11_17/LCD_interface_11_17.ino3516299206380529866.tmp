@@ -1,0 +1,51 @@
+#define CLOCK 5
+#define DATA 4
+#define LOAD 3
+#define EXTID 0x00
+#define INTID 0x00
+
+bool coolingOn = false,internalDec = false,externalDec = false,fanActive = false;
+double externalTemp = 0,internalTemp = 0;
+uint8_t externalDisp = 0,internalDisp = 0;
+
+void setup() {
+  // put your setup code here, to run once:
+  DDRD = 0xFC;
+  DDRB = 0xFF;
+  PORTD = 0x00;
+  PORTB = 0x00;
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+  externalTemp = readTemp(EXTID);
+  internalTemp = readTemp(INTID);
+  checkActivationState();
+  updateDisplay();
+  wait(10);
+}
+float readTemp(int devId){
+  return 0;
+}
+void checkActivationState(void){
+  fanActive = false;
+  coolingOn = false;
+}
+void writeDigit(byte outChar){
+  digitalWrite(CLOCK,LOW);
+  for(int i = 0; i<8; i++){
+    if (bitRead(outChar,i)==0){
+      digitalWrite(DATA,LOW);
+    }else{
+      digitalWrite(DATA,HIGH);
+    }
+    digitalWrite(CLOCK,HIGH);
+    digitalWrite(CLOCK,LOW);
+  }
+}
+void wait(int waitTime){
+  for(int i=0;i<waitTime;i++){
+    i = i+0;
+  }  
+}
+

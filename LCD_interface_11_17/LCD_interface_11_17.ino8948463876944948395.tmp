@@ -1,0 +1,149 @@
+#include <Wire.h>
+
+#define CLOCK 4
+#define DATA 3
+#define LOAD 2
+#define EXTID 0x27
+#define INTID 0x29
+
+bool coolingOn = false,internalDec = false,externalDec = false,fanActive = false;
+double externalTemp = 0,internalTemp = 0;
+uint8_t externalDisp = 0,internalDisp = 0;
+
+
+void setup() {
+  // put your setup code here, to run once:
+  DDRD = 0xFC;
+  DDRB = 0xFF;
+  PORTD = 0x00;
+  PORTB = 0x00;
+  Wire.begin();
+  Serial.begin(9600);
+  Wire.setClock(100000);
+}
+
+void loop() {
+  long tmp;
+  // Wire up display controller to LCD and check that it updates properly
+  externalTemp = readTemp(EXTID); 
+  //internalTemp = readTemp(INTID);
+  internalTemp = analogRead(A0)/102.4;
+  setDisplayTemp(&internalDec,&internalDisp,internalTemp);
+  setDisplayTemp(&externalDec,&externalDisp,externalTemp);
+  checkActivationState(); //Write controller code here
+  updateDisplay();
+  Serial.print("Ext: ");
+  Serial.print(externalTemp);
+  Serial.print(" Int: ");
+  Serial.println(internalTemp);
+  tmp = wait(1000000000);
+}
+void setDisplayTemp(bool* dec,uint8_t* disp,double temp){
+  if (temp>99){
+    *disp = 99;
+    *dec = false;
+  }else if (temp>=10){
+    *disp = floor(temp);
+    *dec = false;
+  }else if (temp>=0){
+    *disp = floor(10*temp);
+    *dec = true;
+  }else{
+    *disp = 0;
+    *dec = true;
+  }  
+}
+void updateDisplay(void){
+  byte outByte = dec2dispByte(internalDisp%10);
+  writeDigit(outByte | coolingOn);
+  outByte = dec2dispByte(internalDisp/10);
+  writeDigit(outByte | internalDec);
+  outByte = dec2dispByte(externalDisp%10);
+  writeDigit(outByte | 0x01);//Divider is always set high
+  outByte = dec2dispByte(externalDisp/10);
+  writeDigit(outByte | externalDec);
+  digitalWrite(LOAD,HIGH);
+  digitalWrite(LOAD,LOW);
+}
+byte dec2dispByte(byte inDec){
+  switch (inDec) {
+    case 0:
+      return B11111100;
+    case 1:
+      return B01100000;
+    case 2:
+      return B11011010;
+    case 3:
+      return B11110010;
+    case 4:
+      return B01100110;
+    case 5:
+      return B10110110;
+    case 6:
+      return B10111110;
+    case 7:
+      return B11100000;
+    case 8:
+      return B11111110;
+    case 9:
+      return B11110110;
+    default:
+      return 0x00;
+  }
+}
+float readTemp(byte address){
+  uint8_t data[4];
+  uint8_t signalBits;
+  uint16_t rawTemp, rawRH;
+  double temp, humidity;
+  
+  Wire.beginTransmission(address);
+  Wire.endTransmission();
+  delay(40);
+  Wire.requestFrom(address, (uint8_t)4);
+  for(int i=0; i<4; i++){
+    data[i] = Wire.read();
+    //Serial.println(data[i],BIN);
+  }
+  signalBits = data[0] >>6;
+  if(signalBits > 0){
+    delay(10);
+    Serial.println("continue");
+    return 3.3;
+  }
+  
+  rawRH = data[0] &= 0x3F;
+  rawRH = (rawRH<<8)+data[1];
+  rawTemp = data[2];
+  rawTemp = (rawTemp<<6)+(data[3]>>2);
+  humidity = (100.0*rawRH)/(0x3FFF-1);
+  temp = 32+((165.0*rawTemp)/(0x3FFF-1)-40)*9.0/5.0;
+  //delay(5000);
+  return temp;
+}
+void checkActivationState(void){
+  fanActive = false;
+  coolingOn = (externalTemp>internalTemp)&(internalTemp>65);
+}
+void writeDigit(byte outChar){
+  digitalWrite(CLOCK,LOW);
+  for(int i = 0; i<8; i++){
+    if (bitRead(outChar,i)==0){
+      digitalWrite(DATA,LOW);
+    }else{
+      digitalWrite(DATA,HIGH);
+    }
+    digitalWrite(CLOCK,HIGH);
+    digitalWrite(CLOCK,LOW);
+  }
+}
+long wait(long waitTime){
+  long tmp;
+  for (int j=0;j<waitTime;j++){
+    for(int i=0;i<waitTime;i++){
+      tmp = tmp/2+30-i;
+    }  
+  }
+  return tmp;
+}
+
